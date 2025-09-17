@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>상품 링크 모음 (검색/정렬/카테고리)</title>
+  <title>상품 링크 모음 · Google Sheets 연동</title>
   <style>
     body{font-family:sans-serif;background:#fff;margin:0}
     .wrap{max-width:760px;margin:24px auto;padding:0 16px}
@@ -19,13 +19,14 @@
     @media(max-width:480px){.card>a{grid-template-columns:70px 1fr} .thumb{width:70px;height:70px}}
     .controls{text-align:center;margin-bottom:20px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
     .controls input,.controls select{padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:14px}
+    .note{font-size:12px;color:#6b7280;text-align:center;margin-top:8px}
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
       <h1>상품 링크 모음</h1>
-      <p>검색 · 정렬 · 카테고리 필터 기능 지원</p>
+      <p>Google Sheets(행 추가) → 자동 반영 · 검색/정렬/카테고리 지원</p>
     </header>
 
     <div class="controls">
@@ -40,11 +41,36 @@
         <option value="title">제목순</option>
       </select>
     </div>
+    <div class="note">시트 컬럼: id, title, desc, href, img, category</div>
 
     <ul id="list"></ul>
   </div>
 
+  <script src="./config.js"></script>
   <script>
+  // --- 간단 CSV 파서 (따옴표/콤마/개행 대응) ---
+  function parseCSV(text){
+    const rows=[]; let row=[]; let field=''; let inQuotes=false;
+    for(let i=0;i<text.length;i++){
+      const c=text[i], n=text[i+1];
+      if(inQuotes){
+        if(c==='"' && n==='"'){ field+='"'; i++; }
+        else if(c==='"'){ inQuotes=false; }
+        else{ field+=c; }
+      }else{
+        if(c==='"'){ inQuotes=true; }
+        else if(c===','){ row.push(field); field=''; }
+        else if(c==='
+'){ row.push(field); rows.push(row); row=[]; field=''; }
+        else if(c===''){ /* skip */ }
+        else{ field+=c; }
+      }
+    }
+    if(field.length>0 || text[text.length-1]===','){ row.push(field); }
+    if(row.length>0){ rows.push(row); }
+    return rows;
+  }
+
   let allItems=[];
 
   function render(items){
@@ -70,18 +96,45 @@
       (!q || it.title.toLowerCase().includes(q) || (it.desc||'').toLowerCase().includes(q)) &&
       (!cat || (it.category===cat))
     );
-    items.sort((a,b)=> (a[sort]>b[sort]?1:-1));
+    items.sort((a,b)=>{
+      const av = (sort==='id' && !isNaN(+a[sort]) ? +a[sort] : (a[sort]||'')).toString().toLowerCase();
+      const bv = (sort==='id' && !isNaN(+b[sort]) ? +b[sort] : (b[sort]||'')).toString().toLowerCase();
+      if(av>bv) return 1; if(av<bv) return -1; return 0;
+    });
     render(items);
   }
 
-  document.getElementById('search').oninput=applyFilters;
-  document.getElementById('category').onchange=applyFilters;
-  document.getElementById('sort').onchange=applyFilters;
+  async function loadFromSheets(){
+    try{
+      let url = CSV_URL;
+      // URL 파라미터로 csv=...가 들어오면 우선 사용 (테스트/여러 시트 전환용)
+      const qp = new URLSearchParams(location.search);
+      if(qp.get('csv')) url = decodeURIComponent(qp.get('csv'));
+      const res = await fetch(url, {cache:'no-cache'});
+      const text = await res.text();
+      const rows = parseCSV(text).filter(r=>r.length>0);
+      const header = rows.shift().map(h=>h.trim());
+      const idx = (name)=> header.indexOf(name);
+      const out = rows.map(r=> ({
+        id:        (r[idx('id')]||'').trim(),
+        title:     (r[idx('title')]||'').trim(),
+        desc:      (r[idx('desc')]||'').trim(),
+        href:      (r[idx('href')]||'').trim(),
+        img:       (r[idx('img')]||'').trim(),
+        category:  (r[idx('category')]||'').trim(),
+      }));
+      allItems = out;
+      applyFilters();
+      // 부모(티스토리)에게 높이 전달 (선택)
+      const height = document.documentElement.scrollHeight;
+      parent.postMessage({type:'LINKS_IFRAME_HEIGHT', height}, '*');
+    }catch(e){
+      console.error('시트 로드 오류:', e);
+      document.getElementById('list').innerHTML = '<li>시트를 불러오지 못했습니다. CSV URL을 확인하세요.</li>';
+    }
+  }
 
-  fetch('data.json', {cache:'no-cache'}).then(r=>r.json()).then(items=>{
-    allItems=items;
-    applyFilters();
-  });
+  loadFromSheets();
   </script>
 </body>
 </html>
