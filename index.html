@@ -26,7 +26,7 @@
   <div class="wrap">
     <header>
       <h1>쿠팡 상품 카드 목록</h1>
-      <p>원하는 아이템을 클릭하면 됩니다.</p>
+      <p>원하는 아이템 클릭하여 바로가기</p>
     </header>
 
     <div class="controls">
@@ -78,6 +78,7 @@
     return rows;
   }
   function headerIndexMap(header){ const map={}; header.forEach((h,i)=>{ map[(h||'').trim().toLowerCase()] = i; }); return (name)=> map[name.toLowerCase()]; }
+  function isBlankRow(r){ return r.every(c => !c || !String(c).trim()); }
   let allItems=[];
   function render(items){
     const ul=document.getElementById('list'); ul.innerHTML='';
@@ -108,10 +109,14 @@
   document.getElementById('search').oninput=applyFilters;
   document.getElementById('category').onchange=applyFilters;
   document.getElementById('sort').onchange=applyFilters;
+
   fetch('cardlink.csv', {cache:'no-cache'}).then(r=>r.text()).then(txt=>{
-    const rows = parseCSV(txt).filter(r=>r.length);
+    const rowsAll = parseCSV(txt);
+    // 1) 빈 행 제거
+    const rows = rowsAll.filter(r => r && r.length && !isBlankRow(r));
     const header = rows.shift().map(h=> (h||'').trim());
     const idxOf = headerIndexMap(header);
+    // 2) 아이템 생성 + 필수값 없는 행 제거(href/title/img)
     const items = rows.map(r=> ({
       id:        (r[idxOf('id')]||'').trim(),
       title:     (r[idxOf('title')]||'').trim(),
@@ -119,7 +124,7 @@
       href:      (r[idxOf('href')]||'').trim(),
       img:       (r[idxOf('img')]||'').trim(),
       category:  (r[idxOf('category')]||'').trim()
-    }));
+    })).filter(it => it.href && it.title && it.img);
     allItems = items; applyFilters();
   }).catch(e=>{ document.getElementById('list').innerHTML = '<li>cardlink.csv를 불러오지 못했습니다.</li>'; console.error(e); });
   </script>
