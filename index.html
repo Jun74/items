@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>쿠팡 카드 링크</title>
+  <title>상품 링크 모음 · CSV 버전(견고 파서)</title>
   <style>
     body{font-family:sans-serif;background:#fff;margin:0}
     .wrap{max-width:760px;margin:24px auto;padding:0 16px}
@@ -25,54 +25,75 @@
 <body>
   <div class="wrap">
     <header>
-      <h1>쿠팡 카드 링크</h1>
-      <p>클릭하면 상품으로 바로 갑니다.</p>    
+      <h1>상품 링크 모음</h1>
+      <p>CSV(cardlink.csv)에서 읽어옵니다 · 쉼표/세미콜론/탭/따옴표 지원</p>
     </header>
 
     <div class="controls">
       <input type="text" id="search" placeholder="검색어 입력">
       <select id="category">
         <option value="">전체</option>
-        <option value="번호">번호</option>
-        <option value="아이템">아이템</option>
+        <option value="주방">주방</option>
+        <option value="수납">수납</option>
       </select>
       <select id="sort">
         <option value="id">번호순</option>
         <option value="title">제목순</option>
       </select>
     </div>
-    <div class="note">CSV 헤더: id,title,desc,href,img,category</div>
+    <div class="note">CSV 헤더(대소문자 무관): id, title, desc, href, img, category</div>
 
     <ul id="list"></ul>
   </div>
 
   <script>
-  function parseCSV(text){
-    const rows=text.trim().split(/\r?\n/).map(r=>r.split(','));
-    const header=rows.shift();
-    return rows.map(r=>{
-      let o={}; header.forEach((h,i)=>o[h]=r[i]); return o;
-    });
+  function stripBOM(t){ return t.charCodeAt(0)===0xFEFF ? t.slice(1) : t; }
+  function detectDelimiter(text){
+    const first = text.split(/\r?\n/).slice(0,3).join('\n');
+    const counts = { ',': (first.match(/,/g)||[]).length, ';': (first.match(/;/g)||[]).length, '\t': (first.match(/\t/g)||[]).length };
+    let best = ','; let max=-1; for(const k in counts){ if(counts[k]>max){ max=counts[k]; best=k; } } return best==='\t' ? '\t' : best;
   }
-
+  function parseCSV(text){
+    text = stripBOM(text);
+    const delimChar = detectDelimiter(text);
+    const delim = delimChar === '\t' ? '\t' : delimChar;
+    const rows=[]; let row=[]; let field=''; let inQuotes=false;
+    for(let i=0;i<text.length;i++){
+      const c=text[i], n=text[i+1];
+      if(inQuotes){
+        if(c==='"' && n==='"'){ field+='"'; i++; }
+        else if(c==='"'){ inQuotes=false; }
+        else{ field+=c; }
+      }else{
+        if(c==='"'){ inQuotes=true; }
+        else if((delim === '\t' && c==='\t') || (delim !== '\t' && c===delim)){
+          row.push(field); field='';
+        }else if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+        else if(c==='\r'){ /* ignore */ }
+        else{ field+=c; }
+      }
+    }
+    if(field.length>0 || text[text.length-1]===delim){ row.push(field); }
+    if(row.length>0){ rows.push(row); }
+    return rows;
+  }
+  function headerIndexMap(header){ const map={}; header.forEach((h,i)=>{ map[(h||'').trim().toLowerCase()] = i; }); return (name)=> map[name.toLowerCase()]; }
   let allItems=[];
-
   function render(items){
     const ul=document.getElementById('list'); ul.innerHTML='';
     items.forEach(it=>{
+      const a = document.createElement('a');
+      a.href = it.href || '#'; a.target = '_blank'; a.rel = 'noopener';
       const li=document.createElement('li'); li.className='card';
-      li.innerHTML=`<a href="${it.href}" target="_blank" rel="noopener">
-        <div class="thumb"><img src="${it.img}" alt="${it.title}"></div>
+      a.innerHTML = `
+        <div class="thumb"><img src="${it.img||''}" alt="${(it.title||'').replace(/"/g,'&quot;')}"></div>
         <div class="meta">
-          <div class="title">[${it.id}] ${it.title}</div>
-
+          <div class="title">[${it.id||''}] ${it.title||''}</div>
           <div class="desc">${it.desc||''}</div>
-        </div>
-      </a>`;
-      ul.appendChild(li);
+        </div>`;
+      li.appendChild(a); ul.appendChild(li);
     });
   }
-
   function applyFilters(){
     const q=document.getElementById('search').value.toLowerCase();
     const cat=document.getElementById('category').value;
@@ -81,19 +102,26 @@
       (!q || (it.title||'').toLowerCase().includes(q) || (it.desc||'').toLowerCase().includes(q)) &&
       (!cat || (it.category===cat))
     );
-    items.sort((a,b)=> (a[sort]>b[sort]?1:-1));
+    items.sort((a,b)=> (String(a[sort]||'').localeCompare(String(b[sort]||''), 'ko', {numeric:true})));
     render(items);
   }
-
   document.getElementById('search').oninput=applyFilters;
   document.getElementById('category').onchange=applyFilters;
   document.getElementById('sort').onchange=applyFilters;
-
-  // GitHub Pages에 cardlink.csv 파일을 올려두면 이 코드가 불러옵니다
   fetch('cardlink.csv', {cache:'no-cache'}).then(r=>r.text()).then(txt=>{
-    allItems=parseCSV(txt);
-    applyFilters();
-  });
+    const rows = parseCSV(txt).filter(r=>r.length);
+    const header = rows.shift().map(h=> (h||'').trim());
+    const idxOf = headerIndexMap(header);
+    const items = rows.map(r=> ({
+      id:        (r[idxOf('id')]||'').trim(),
+      title:     (r[idxOf('title')]||'').trim(),
+      desc:      (r[idxOf('desc')]||'').trim(),
+      href:      (r[idxOf('href')]||'').trim(),
+      img:       (r[idxOf('img')]||'').trim(),
+      category:  (r[idxOf('category')]||'').trim()
+    }));
+    allItems = items; applyFilters();
+  }).catch(e=>{ document.getElementById('list').innerHTML = '<li>cardlink.csv를 불러오지 못했습니다.</li>'; console.error(e); });
   </script>
 </body>
 </html>
