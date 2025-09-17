@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>쿠팡 카드 링크</title>
+  <title>상품 링크 모음 · CSV 버전</title>
   <style>
     body{font-family:sans-serif;background:#fff;margin:0}
     .wrap{max-width:760px;margin:24px auto;padding:0 16px}
@@ -25,51 +25,34 @@
 <body>
   <div class="wrap">
     <header>
-      <h2>쿠팡 카드 링크</h2>
-      <p>원하는 아이템 번호를 클릭하면 상품으로 이동합니다.</p>
-      <p>"이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다."</p>
+      <h1>상품 링크 모음</h1>
+      <p>CSV 파일(cardlink.csv) 수정 → GitHub에 업로드하면 자동 반영</p>
     </header>
 
     <div class="controls">
       <input type="text" id="search" placeholder="검색어 입력">
       <select id="category">
         <option value="">전체</option>
-        <option value="주방">번호</option>
-        <option value="수납">아이템</option>
+        <option value="주방">주방</option>
+        <option value="수납">수납</option>
       </select>
       <select id="sort">
         <option value="id">번호순</option>
         <option value="title">제목순</option>
       </select>
     </div>
+    <div class="note">CSV 헤더: id,title,desc,href,img,category</div>
 
     <ul id="list"></ul>
   </div>
 
-  <script src="./config.js"></script>
   <script>
-  // --- 간단 CSV 파서 (따옴표/콤마/개행 대응) ---
   function parseCSV(text){
-    const rows=[]; let row=[]; let field=''; let inQuotes=false;
-    for(let i=0;i<text.length;i++){
-      const c=text[i], n=text[i+1];
-      if(inQuotes){
-        if(c==='"' && n==='"'){ field+='"'; i++; }
-        else if(c==='"'){ inQuotes=false; }
-        else{ field+=c; }
-      }else{
-        if(c==='"'){ inQuotes=true; }
-        else if(c===','){ row.push(field); field=''; }
-        else if(c==='
-'){ row.push(field); rows.push(row); row=[]; field=''; }
-        else if(c==='
-'){ /* skip */ }
-        else{ field+=c; }
-      }
-    }
-    if(field.length>0 || text[text.length-1]===','){ row.push(field); }
-    if(row.length>0){ rows.push(row); }
-    return rows;
+    const rows=text.trim().split(/\r?\n/).map(r=>r.split(','));
+    const header=rows.shift();
+    return rows.map(r=>{
+      let o={}; header.forEach((h,i)=>o[h]=r[i]); return o;
+    });
   }
 
   let allItems=[];
@@ -82,6 +65,7 @@
         <div class="thumb"><img src="${it.img}" alt="${it.title}"></div>
         <div class="meta">
           <div class="title">[${it.id}] ${it.title}</div>
+
           <div class="desc">${it.desc||''}</div>
         </div>
       </a>`;
@@ -94,48 +78,22 @@
     const cat=document.getElementById('category').value;
     const sort=document.getElementById('sort').value;
     let items=allItems.filter(it=>
-      (!q || it.title.toLowerCase().includes(q) || (it.desc||'').toLowerCase().includes(q)) &&
+      (!q || (it.title||'').toLowerCase().includes(q) || (it.desc||'').toLowerCase().includes(q)) &&
       (!cat || (it.category===cat))
     );
-    items.sort((a,b)=>{
-      const av = (sort==='id' && !isNaN(+a[sort]) ? +a[sort] : (a[sort]||'')).toString().toLowerCase();
-      const bv = (sort==='id' && !isNaN(+b[sort]) ? +b[sort] : (b[sort]||'')).toString().toLowerCase();
-      if(av>bv) return 1; if(av<bv) return -1; return 0;
-    });
+    items.sort((a,b)=> (a[sort]>b[sort]?1:-1));
     render(items);
   }
 
-  async function loadFromSheets(){
-    try{
-      let url = CSV_URL;
-      // URL 파라미터로 csv=...가 들어오면 우선 사용 (테스트/여러 시트 전환용)
-      const qp = new URLSearchParams(location.search);
-      if(qp.get('csv')) url = decodeURIComponent(qp.get('csv'));
-      const res = await fetch(url, {cache:'no-cache'});
-      const text = await res.text();
-      const rows = parseCSV(text).filter(r=>r.length>0);
-      const header = rows.shift().map(h=>h.trim());
-      const idx = (name)=> header.indexOf(name);
-      const out = rows.map(r=> ({
-        id:        (r[idx('id')]||'').trim(),
-        title:     (r[idx('title')]||'').trim(),
-        desc:      (r[idx('desc')]||'').trim(),
-        href:      (r[idx('href')]||'').trim(),
-        img:       (r[idx('img')]||'').trim(),
-        category:  (r[idx('category')]||'').trim(),
-      }));
-      allItems = out;
-      applyFilters();
-      // 부모(티스토리)에게 높이 전달 (선택)
-      const height = document.documentElement.scrollHeight;
-      parent.postMessage({type:'LINKS_IFRAME_HEIGHT', height}, '*');
-    }catch(e){
-      console.error('시트 로드 오류:', e);
-      document.getElementById('list').innerHTML = '<li>시트를 불러오지 못했습니다. CSV URL을 확인하세요.</li>';
-    }
-  }
+  document.getElementById('search').oninput=applyFilters;
+  document.getElementById('category').onchange=applyFilters;
+  document.getElementById('sort').onchange=applyFilters;
 
-  loadFromSheets();
+  // GitHub Pages에 cardlink.csv 파일을 올려두면 이 코드가 불러옵니다
+  fetch('cardlink.csv', {cache:'no-cache'}).then(r=>r.text()).then(txt=>{
+    allItems=parseCSV(txt);
+    applyFilters();
+  });
   </script>
 </body>
 </html>
