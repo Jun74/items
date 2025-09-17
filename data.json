@@ -1,0 +1,23 @@
+[
+  {
+    "id": "007",
+    "title": "무타공 셀프 중문",
+    "desc": "간편 설치 · 상세페이지 이동",
+    "href": "https://example.com/products/007",
+    "img": "https://via.placeholder.com/160x160.png?text=007"
+  },
+  {
+    "id": "006",
+    "title": "자동회전 인덕 물팬",
+    "desc": "인덕션 호환 · 세척 용이",
+    "href": "https://example.com/products/006",
+    "img": "https://via.placeholder.com/160x160.png?text=006"
+  },
+  {
+    "id": "005",
+    "title": "철제 슬라이 정리",
+    "desc": "싱크대/데스크 정리 · 튼튼한 철제",
+    "href": "https://example.com/products/005",
+    "img": "https://via.placeholder.com/160x160.png?text=005"
+  }
+]
