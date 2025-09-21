@@ -24,7 +24,7 @@
 
   <style>
     .blink {
-      animation: blink 1s step-start infinite;
+      animation: blink 3s step-start infinite;
       color: red; /* 원하는 색상 */
       font-size: 20px;
       font-weight: bold;
@@ -40,13 +40,13 @@
   <style>
     .blink-color {
       animation: blinkColor 1s infinite;
-      font-size: 24px;
+      font-size: 20px;
       font-weight: bold;
       }
     
       @keyframes blinkColor {
-        0%, 100% { color: red; }
-        50% { color: yellow; }
+        0%, 70% { color: red; }
+        30% { color: Orenge; }
       }
     </style>
   
@@ -54,7 +54,7 @@
 <body>
   <div class="wrap">
     <header>
-      <marquee behavior="scroll" direction="left" scrollamount="7">
+      <marquee behavior="scroll" direction="left" scrollamount="1">
         <p><small>"이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다."</small></p>
       </marquee>
       <br>
